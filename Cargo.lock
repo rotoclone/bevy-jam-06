@@ -494,6 +494,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy-jam-06"
+version = "0.1.0"
+dependencies = [
+ "avian2d",
+ "bevy",
+ "bevy_asset_loader",
+ "bevy_common_assets",
+ "bevy_editor_pls",
+ "bevy_mod_debugdump",
+ "bevy_simple_prefs",
+ "bevy_simple_subsecond_system",
+ "bevy_state",
+ "dirs",
+ "getrandom 0.3.3",
+ "iyes_progress",
+ "lazy-regex",
+ "leafwing-input-manager",
+ "log",
+ "pyri_state",
+ "pyri_tooltip",
+ "rand 0.8.5",
+ "ron 0.10.1",
+ "serde",
+ "tiny_bail",
+ "tracing",
+ "variadics_please",
+]
+
+[[package]]
 name = "bevy_a11y"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2988,35 +3017,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "54614a3312934d066701a80f20f15fa3b56d67ac7722b39eea5b4c9dd1d66c94"
 dependencies = [
  "thread_local",
-]
-
-[[package]]
-name = "game"
-version = "0.1.0"
-dependencies = [
- "avian2d",
- "bevy",
- "bevy_asset_loader",
- "bevy_common_assets",
- "bevy_editor_pls",
- "bevy_mod_debugdump",
- "bevy_simple_prefs",
- "bevy_simple_subsecond_system",
- "bevy_state",
- "dirs",
- "getrandom 0.3.3",
- "iyes_progress",
- "lazy-regex",
- "leafwing-input-manager",
- "log",
- "pyri_state",
- "pyri_tooltip",
- "rand 0.8.5",
- "ron 0.10.1",
- "serde",
- "tiny_bail",
- "tracing",
- "variadics_please",
 ]
 
 [[package]]

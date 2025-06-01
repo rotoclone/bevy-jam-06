@@ -11,7 +11,7 @@ fn spawn_main_menu(mut commands: Commands, menu_root: Res<MenuRoot>) {
     commands
         .entity(menu_root.ui)
         .with_child(widget::body(children![
-            widget::header("[b]Game"),
+            widget::header("[b]bevy-jam-06"),
             widget::column_of_buttons(children![
                 widget::big_button("Play", open_intro),
                 widget::big_button("Settings", open_settings),

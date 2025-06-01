@@ -1,5 +1,5 @@
 [package]
-name = "game"
+name = "bevy-jam-06"
 version = "0.1.0"
 edition = "2024"
 # TODO: Workaround for <https://github.com/DioxusLabs/dioxus/issues/4160>.
