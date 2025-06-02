@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_plugins(PhysicsPlugins::default().with_length_unit(PIXELS_PER_METER));
-    app.insert_resource(Gravity::ZERO);
+    app.insert_resource(Gravity(Vec2::Y * -9.81 * PIXELS_PER_METER));
 
     app.add_systems(StateFlush, Pause.on_edge(unpause_physics, pause_physics));
 }

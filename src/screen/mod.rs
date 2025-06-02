@@ -52,8 +52,9 @@ impl FromWorld for ScreenRoot {
 )]
 #[state(after(WindowReady), before(Menu, Pause), react, bevy_state, log_flush)]
 pub enum Screen {
-    #[default]
+    //TODO #[default]
     Splash,
+    #[default]
     Title,
     Loading,
     Gameplay,
@@ -76,7 +77,7 @@ impl Configure for Screen {
             ),
         );
         app.add_plugins((
-            splash::plugin,
+            //TODO splash::plugin,
             title::plugin,
             loading::plugin,
             gameplay::plugin,

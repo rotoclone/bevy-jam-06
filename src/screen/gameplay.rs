@@ -1,9 +1,22 @@
 use crate::core::audio::AudioSettings;
 use crate::core::audio::music_audio;
+use crate::core::window::WINDOW_HEIGHT;
 use crate::menu::Menu;
 use crate::prelude::*;
 use crate::screen::Screen;
-use crate::screen::ScreenRoot;
+
+const WALL_COLOR: Color = Color::srgb(0.2, 0.2, 0.2);
+const FLOOR_COLOR: Color = Color::srgb(0.3, 0.1, 0.1);
+const PLAYER_COLOR: Color = Color::srgb(0.2, 0.5, 0.2);
+
+const PLAY_AREA_DIAMETER: f32 = WINDOW_HEIGHT;
+const FLOOR_THICKNESS: f32 = 5.0;
+const PLAYER_WIDTH: f32 = 10.0;
+const PLAYER_HEIGHT: f32 = 20.0;
+
+const JUMP_FORCE: f32 = 100.0;
+const MOVEMENT_ACCEL: f32 = 500.0;
+const MAX_MOVEMENT_SPEED: f32 = 100.0;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(StateFlush, Screen::Gameplay.on_enter(spawn_gameplay_screen));
@@ -11,20 +24,136 @@ pub(super) fn plugin(app: &mut App) {
     app.configure::<(GameplayAssets, GameplayAction)>();
 }
 
+#[derive(Component)]
+struct Player;
+
 fn spawn_gameplay_screen(
     mut commands: Commands,
-    screen_root: Res<ScreenRoot>,
     audio_settings: Res<AudioSettings>,
     assets: Res<GameplayAssets>,
 ) {
-    commands
-        .entity(screen_root.ui)
-        .with_child(widget::column_center(children![widget::label(
-            "Gameplay goes here. Press P to pause!",
-        )]));
     commands.spawn((
         music_audio(&audio_settings, assets.music.clone()),
         DespawnOnExitState::<Screen>::Recursive,
+    ));
+
+    // left wall
+    commands.spawn((
+        Transform::from_translation(Vec3::new(-PLAY_AREA_DIAMETER, 0.0, 0.0)),
+        Sprite::from_color(
+            WALL_COLOR,
+            Vec2::new(PLAY_AREA_DIAMETER, PLAY_AREA_DIAMETER),
+        ),
+        Collider::rectangle(PLAY_AREA_DIAMETER, PLAY_AREA_DIAMETER),
+        RigidBody::Static,
+        DespawnOnExitState::<Screen>::Recursive,
+    ));
+
+    // top wall
+    commands.spawn((
+        Transform::from_translation(Vec3::new(0.0, PLAY_AREA_DIAMETER, 0.0)),
+        Sprite::from_color(
+            WALL_COLOR,
+            Vec2::new(PLAY_AREA_DIAMETER, PLAY_AREA_DIAMETER),
+        ),
+        Collider::rectangle(PLAY_AREA_DIAMETER, PLAY_AREA_DIAMETER),
+        RigidBody::Static,
+        DespawnOnExitState::<Screen>::Recursive,
+    ));
+
+    // right wall
+    commands.spawn((
+        Transform::from_translation(Vec3::new(PLAY_AREA_DIAMETER, 0.0, 0.0)),
+        Sprite::from_color(
+            WALL_COLOR,
+            Vec2::new(PLAY_AREA_DIAMETER, PLAY_AREA_DIAMETER),
+        ),
+        Collider::rectangle(PLAY_AREA_DIAMETER, PLAY_AREA_DIAMETER),
+        RigidBody::Static,
+        DespawnOnExitState::<Screen>::Recursive,
+    ));
+
+    // bottom wall
+    commands.spawn((
+        Transform::from_translation(Vec3::new(0.0, -PLAY_AREA_DIAMETER, 0.0)),
+        Sprite::from_color(
+            WALL_COLOR,
+            Vec2::new(PLAY_AREA_DIAMETER, PLAY_AREA_DIAMETER),
+        ),
+        Collider::rectangle(PLAY_AREA_DIAMETER, PLAY_AREA_DIAMETER),
+        RigidBody::Static,
+        DespawnOnExitState::<Screen>::Recursive,
+    ));
+
+    // floor 1
+    commands.spawn((
+        Transform::from_translation(Vec3::new(
+            -(PLAY_AREA_DIAMETER * 0.25),
+            -(PLAY_AREA_DIAMETER * 0.50),
+            0.0,
+        )),
+        Sprite::from_color(
+            FLOOR_COLOR,
+            Vec2::new(PLAY_AREA_DIAMETER * 0.5, FLOOR_THICKNESS),
+        ),
+        Collider::rectangle(PLAY_AREA_DIAMETER * 0.5, FLOOR_THICKNESS),
+        RigidBody::Static,
+        DespawnOnExitState::<Screen>::Recursive,
+    ));
+
+    // floor 2
+    commands.spawn((
+        Transform::from_translation(Vec3::new(
+            PLAY_AREA_DIAMETER * 0.25,
+            -(PLAY_AREA_DIAMETER * 0.25),
+            0.0,
+        )),
+        Sprite::from_color(
+            FLOOR_COLOR,
+            Vec2::new(PLAY_AREA_DIAMETER / 2.0, FLOOR_THICKNESS),
+        ),
+        Collider::rectangle(PLAY_AREA_DIAMETER / 2.0, FLOOR_THICKNESS),
+        RigidBody::Static,
+        DespawnOnExitState::<Screen>::Recursive,
+    ));
+
+    // floor 3
+    commands.spawn((
+        Transform::from_translation(Vec3::new(-(PLAY_AREA_DIAMETER * 0.25), 0.0, 0.0)),
+        Sprite::from_color(
+            FLOOR_COLOR,
+            Vec2::new(PLAY_AREA_DIAMETER * 0.5, FLOOR_THICKNESS),
+        ),
+        Collider::rectangle(PLAY_AREA_DIAMETER * 0.5, FLOOR_THICKNESS),
+        RigidBody::Static,
+        DespawnOnExitState::<Screen>::Recursive,
+    ));
+
+    // floor 4
+    commands.spawn((
+        Transform::from_translation(Vec3::new(
+            PLAY_AREA_DIAMETER * 0.25,
+            PLAY_AREA_DIAMETER * 0.25,
+            0.0,
+        )),
+        Sprite::from_color(
+            FLOOR_COLOR,
+            Vec2::new(PLAY_AREA_DIAMETER * 0.5, FLOOR_THICKNESS),
+        ),
+        Collider::rectangle(PLAY_AREA_DIAMETER * 0.5, FLOOR_THICKNESS),
+        RigidBody::Static,
+        DespawnOnExitState::<Screen>::Recursive,
+    ));
+
+    // player
+    commands.spawn((
+        Transform::from_translation(Vec3::new(0.0, -(PLAY_AREA_DIAMETER * 0.33), 0.0)),
+        Sprite::from_color(PLAYER_COLOR, Vec2::new(PLAYER_WIDTH, PLAYER_HEIGHT)),
+        Collider::rectangle(PLAYER_WIDTH, PLAYER_HEIGHT),
+        RigidBody::Dynamic,
+        LockedAxes::ROTATION_LOCKED,
+        DespawnOnExitState::<Screen>::Recursive,
+        Player,
     ));
 }
 
@@ -46,6 +175,9 @@ impl Configure for GameplayAssets {
 pub enum GameplayAction {
     Pause,
     CloseMenu,
+    Jump,
+    MoveLeft,
+    MoveRight,
 }
 
 impl Configure for GameplayAction {
@@ -56,7 +188,10 @@ impl Configure for GameplayAction {
                 .with(Self::Pause, GamepadButton::Start)
                 .with(Self::Pause, KeyCode::Escape)
                 .with(Self::Pause, KeyCode::KeyP)
-                .with(Self::CloseMenu, KeyCode::KeyP),
+                .with(Self::CloseMenu, KeyCode::KeyP)
+                .with(Self::Jump, KeyCode::Space)
+                .with(Self::MoveLeft, KeyCode::KeyA)
+                .with(Self::MoveRight, KeyCode::KeyD),
         );
         app.add_plugins(InputManagerPlugin::<Self>::default());
         app.add_systems(
@@ -68,6 +203,14 @@ impl Configure for GameplayAction {
                 Menu::clear
                     .in_set(UpdateSystems::RecordInput)
                     .run_if(Menu::is_enabled.and(action_just_pressed(Self::CloseMenu))),
+                jump.in_set(UpdateSystems::RecordInput)
+                    .run_if(action_just_pressed(Self::Jump)),
+                move_left
+                    .in_set(UpdateSystems::RecordInput)
+                    .run_if(action_pressed(Self::MoveLeft)),
+                move_right
+                    .in_set(UpdateSystems::RecordInput)
+                    .run_if(action_pressed(Self::MoveRight)),
             )),
         );
     }
@@ -80,4 +223,31 @@ fn spawn_pause_overlay(mut commands: Commands) {
         DespawnOnExitState::<Screen>::default(),
         DespawnOnDisableState::<Menu>::default(),
     ));
+}
+
+/// Makes the player jump
+fn jump(velocity_query: Query<&mut LinearVelocity, With<Player>>) {
+    for mut velocity in velocity_query {
+        velocity.y = JUMP_FORCE;
+    }
+}
+
+/// Makes the player move to the left
+fn move_left(time: Res<Time>, velocity_query: Query<&mut LinearVelocity, With<Player>>) {
+    let delta_secs = time.delta_secs();
+    for mut velocity in velocity_query {
+        if velocity.x > -MAX_MOVEMENT_SPEED {
+            velocity.x -= MOVEMENT_ACCEL * delta_secs;
+        }
+    }
+}
+
+/// Makes the player move to the right
+fn move_right(time: Res<Time>, velocity_query: Query<&mut LinearVelocity, With<Player>>) {
+    let delta_secs = time.delta_secs();
+    for mut velocity in velocity_query {
+        if velocity.x < MAX_MOVEMENT_SPEED {
+            velocity.x += MOVEMENT_ACCEL * delta_secs;
+        }
+    }
 }

@@ -10,7 +10,7 @@
     ],
     // Allow rust-analyzer and cargo to run simultaneously.
     // This uses a heavy amount of storage space, so consider commenting it out.
-    "rust-analyzer.cargo.targetDir": true,
+    //"rust-analyzer.cargo.targetDir": true,
     // Make rust-analyzer ignore macros that would interfere with analysis.
     "rust-analyzer.procMacro.ignored": {
         "bevy_simple_subsecond_system_macros": [

@@ -2,8 +2,12 @@ use bevy::window::ExitCondition;
 use bevy::window::PresentMode;
 use bevy::window::PrimaryWindow;
 use bevy::window::WindowMode;
+use bevy::window::WindowResolution;
 
 use crate::prelude::*;
+
+pub const WINDOW_WIDTH: f32 = 1280.0;
+pub const WINDOW_HEIGHT: f32 = 720.0;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_plugins(WindowPlugin {
@@ -11,6 +15,7 @@ pub(super) fn plugin(app: &mut App) {
             name: Some("bevy_app".to_string()),
             fit_canvas_to_parent: true,
             visible: false,
+            resolution: WindowResolution::new(WINDOW_WIDTH, WINDOW_HEIGHT),
             ..default()
         }),
         exit_condition: ExitCondition::OnPrimaryClosed,
