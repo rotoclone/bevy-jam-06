@@ -1,8 +1,15 @@
 use crate::prelude::*;
 
+use super::window::{WINDOW_HEIGHT, WINDOW_WIDTH};
+
 pub(super) fn plugin(app: &mut App) {
     app.configure::<(CameraRoot, SmoothFollow, AbsoluteScale)>();
 }
+
+const STARTING_ZOOM_LEVEL: f32 = 1.0;
+
+#[derive(Resource)]
+pub struct ZoomLevel(pub f32);
 
 #[derive(Resource, Reflect)]
 #[reflect(Resource)]
@@ -14,6 +21,7 @@ impl Configure for CameraRoot {
     fn configure(app: &mut App) {
         app.register_type::<Self>();
         app.init_resource::<Self>();
+        app.insert_resource(ZoomLevel(STARTING_ZOOM_LEVEL));
     }
 }
 
@@ -72,6 +80,26 @@ fn apply_smooth_follow(
     }
 }
 
+/// Adjusts the camera zoom when the window is resized
+fn zoom_based_on_window_size(
+    camera_root: Res<CameraRoot>,
+    mut camera_query: Query<&mut Projection, With<Camera>>,
+    window_query: Query<&Window>,
+    zoom_level: Res<ZoomLevel>,
+) {
+    let mut projection = r!(camera_query.get_mut(camera_root.primary));
+    let projection = r!(match &mut *projection {
+        Projection::Orthographic(x) => Some(x),
+        _ => None,
+    });
+
+    let window = r!(window_query.single());
+
+    let base_scale = (WINDOW_WIDTH / window.width()).max(WINDOW_HEIGHT / window.height());
+
+    projection.scale = base_scale * zoom_level.0;
+}
+
 // TODO: Workaround for <https://github.com/bevyengine/bevy/issues/1890>.
 /// Camera zoom-independent scale.
 #[derive(Component, Reflect)]
@@ -81,7 +109,10 @@ pub struct AbsoluteScale(pub Vec3);
 impl Configure for AbsoluteScale {
     fn configure(app: &mut App) {
         app.register_type::<Self>();
-        app.add_systems(Update, apply_absolute_scale.in_set(UpdateSystems::SyncLate));
+        app.add_systems(
+            Update,
+            (zoom_based_on_window_size, apply_absolute_scale).in_set(UpdateSystems::SyncLate),
+        );
     }
 }
 

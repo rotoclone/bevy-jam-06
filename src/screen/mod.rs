@@ -1,11 +1,7 @@
 pub mod fade;
 mod gameplay;
 mod loading;
-mod splash;
 mod title;
-
-use bevy::ecs::schedule::ScheduleConfigs;
-use bevy::ecs::system::ScheduleSystem;
 
 use crate::core::camera::CameraRoot;
 use crate::core::window::WindowReady;
@@ -52,8 +48,6 @@ impl FromWorld for ScreenRoot {
 )]
 #[state(after(WindowReady), before(Menu, Pause), react, bevy_state, log_flush)]
 pub enum Screen {
-    //TODO #[default]
-    Splash,
     #[default]
     Title,
     Loading,
@@ -112,12 +106,4 @@ fn reset_screen_time(mut screen_time: ResMut<ScreenTime>) {
 #[cfg_attr(feature = "native_dev", hot)]
 fn tick_screen_time(time: Res<Time>, mut screen_time: ResMut<ScreenTime>) {
     screen_time.0 += time.delta();
-}
-
-//#[cfg_attr(feature = "native_dev", hot)]
-fn wait_in_screen(duration: f32) -> ScheduleConfigs<ScheduleSystem> {
-    (move |screen_time: Res<ScreenTime>| -> Progress {
-        (screen_time.0.as_secs_f32() >= duration).into()
-    })
-    .track_progress::<BevyState<Screen>>()
 }
