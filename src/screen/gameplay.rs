@@ -14,9 +14,10 @@ const FLOOR_THICKNESS: f32 = 5.0;
 const PLAYER_WIDTH: f32 = 10.0;
 const PLAYER_HEIGHT: f32 = 20.0;
 
-const JUMP_FORCE: f32 = 100.0;
-const MOVEMENT_ACCEL: f32 = 500.0;
+const JUMP_FORCE: f32 = 200.0;
+const MOVEMENT_ACCEL: f32 = 1000.0;
 const MAX_MOVEMENT_SPEED: f32 = 100.0;
+const DEFAULT_MOVEMENT_DAMPING_FACTOR: f32 = 0.92;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(StateFlush, Screen::Gameplay.on_enter(spawn_gameplay_screen));
@@ -26,6 +27,10 @@ pub(super) fn plugin(app: &mut App) {
 
 #[derive(Component)]
 struct Player;
+
+/// The damping factor used for slowing down movement.
+#[derive(Component)]
+pub struct MovementDampingFactor(f32);
 
 fn spawn_gameplay_screen(
     mut commands: Commands,
@@ -154,6 +159,7 @@ fn spawn_gameplay_screen(
         LockedAxes::ROTATION_LOCKED,
         DespawnOnExitState::<Screen>::Recursive,
         Player,
+        MovementDampingFactor(DEFAULT_MOVEMENT_DAMPING_FACTOR),
     ));
 }
 
@@ -211,6 +217,7 @@ impl Configure for GameplayAction {
                 move_right
                     .in_set(UpdateSystems::RecordInput)
                     .run_if(action_pressed(Self::MoveRight)),
+                apply_movement_damping.in_set(UpdateSystems::Update),
             )),
         );
     }
@@ -249,5 +256,13 @@ fn move_right(time: Res<Time>, velocity_query: Query<&mut LinearVelocity, With<P
         if velocity.x < MAX_MOVEMENT_SPEED {
             velocity.x += MOVEMENT_ACCEL * delta_secs;
         }
+    }
+}
+
+/// Slows down movement in the X direction.
+fn apply_movement_damping(mut query: Query<(&MovementDampingFactor, &mut LinearVelocity)>) {
+    for (damping_factor, mut linear_velocity) in &mut query {
+        // We could use `LinearDamping`, but we don't want to dampen movement along the Y axis
+        linear_velocity.x *= damping_factor.0;
     }
 }
