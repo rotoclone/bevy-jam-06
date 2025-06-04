@@ -1,5 +1,6 @@
 use crate::core::audio::AudioSettings;
 use crate::core::audio::music_audio;
+use crate::core::mouse_position::MousePosition;
 use crate::core::window::WINDOW_HEIGHT;
 use crate::menu::Menu;
 use crate::prelude::*;
@@ -8,11 +9,18 @@ use crate::screen::Screen;
 const WALL_COLOR: Color = Color::srgb(0.2, 0.2, 0.2);
 const FLOOR_COLOR: Color = Color::srgb(0.3, 0.1, 0.1);
 const PLAYER_COLOR: Color = Color::srgb(0.2, 0.5, 0.2);
+const CROSSHAIR_COLOR: Color = Color::WHITE;
 
 const PLAY_AREA_DIAMETER: f32 = WINDOW_HEIGHT;
+
 const FLOOR_THICKNESS: f32 = 5.0;
+
 const PLAYER_WIDTH: f32 = 10.0;
 const PLAYER_HEIGHT: f32 = 20.0;
+
+const CROSSHAIR_WIDTH: f32 = 5.0;
+const CROSSHAIR_HEIGHT: f32 = 5.0;
+const CROSSHAIR_Z: f32 = 10.0;
 
 const JUMP_FORCE: f32 = 200.0;
 const MOVEMENT_ACCEL: f32 = 1000.0;
@@ -21,12 +29,19 @@ const DEFAULT_MOVEMENT_DAMPING_FACTOR: f32 = 0.92;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(StateFlush, Screen::Gameplay.on_enter(spawn_gameplay_screen));
+    app.add_systems(
+        Update,
+        update_crosshair_position.in_set(UpdateSystems::Update),
+    );
 
     app.configure::<(GameplayAssets, GameplayAction)>();
 }
 
 #[derive(Component)]
 struct Player;
+
+#[derive(Component)]
+struct Crosshair;
 
 /// The damping factor used for slowing down movement.
 #[derive(Component)]
@@ -161,6 +176,27 @@ fn spawn_gameplay_screen(
         Player,
         MovementDampingFactor(DEFAULT_MOVEMENT_DAMPING_FACTOR),
     ));
+
+    // crosshair
+    commands.spawn((
+        Transform::from_translation(Vec3::new(0.0, 0.0, CROSSHAIR_Z)),
+        Sprite::from_color(
+            CROSSHAIR_COLOR,
+            Vec2::new(CROSSHAIR_WIDTH, CROSSHAIR_HEIGHT),
+        ),
+        DespawnOnExitState::<Screen>::Recursive,
+        Crosshair,
+    ));
+}
+
+/// Updates the position of the crosshair to match the mouse position
+fn update_crosshair_position(
+    mouse_position: Res<MousePosition>,
+    mut crosshair_query: Query<&mut Transform, With<Crosshair>>,
+) {
+    let mut crosshair_transform = r!(crosshair_query.single_mut());
+    crosshair_transform.translation.x = mouse_position.0.x;
+    crosshair_transform.translation.y = mouse_position.0.y;
 }
 
 #[derive(AssetCollection, Resource, Reflect, Default)]
