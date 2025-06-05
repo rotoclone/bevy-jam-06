@@ -246,7 +246,8 @@ pub struct BulletCollisionHooks<'w, 's> {
 
 // Implement the `CollisionHooks` trait.
 impl CollisionHooks for BulletCollisionHooks<'_, '_> {
-    fn filter_pairs(&self, collider1: Entity, collider2: Entity, _commands: &mut Commands) -> bool {
+    #[cfg_attr(bevy_lint, allow(bevy::borrowed_reborrowable))]
+    fn filter_pairs(&self, collider1: Entity, collider2: Entity, _: &mut Commands) -> bool {
         // don't allow collisions between an entity and the bullets it fires
         if let Ok(bullet) = self.bullet_query.get(collider1) {
             return bullet.source != collider2;
