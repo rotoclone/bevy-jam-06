@@ -1,5 +1,3 @@
-use bevy::ecs::query::QueryData;
-use bevy::ecs::query::QueryFilter;
 use bevy::ecs::system::SystemParam;
 
 use crate::core::audio::AudioSettings;
@@ -288,24 +286,6 @@ fn handle_bullet_collisions(
             commands.entity(bullet_entity).despawn();
         }
     }
-}
-
-/// Gets either `a` or `b` from the provided query.
-/// Returns a tuple with the found entity first and the non-found entity second.
-fn get_either<Q: QueryData, F: QueryFilter>(
-    a: Entity,
-    b: Entity,
-    query: &Query<Q, F>,
-) -> Option<(Entity, Entity)> {
-    if query.get(a).is_ok() {
-        return Some((a, b));
-    }
-
-    if query.get(b).is_ok() {
-        return Some((b, a));
-    }
-
-    None
 }
 
 #[derive(AssetCollection, Resource, Reflect, Default)]
