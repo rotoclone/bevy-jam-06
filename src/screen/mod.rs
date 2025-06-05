@@ -1,5 +1,6 @@
 pub mod fade;
 mod gameplay;
+pub use gameplay::BulletCollisionHooks;
 mod loading;
 mod title;
 

@@ -20,7 +20,7 @@ impl Default for AudioSettings {
     fn default() -> Self {
         Self {
             master_volume: 0.5,
-            music_volume: 0.5,
+            music_volume: 0.0, //TODO 0.5,
             ui_volume: 0.5,
         }
     }

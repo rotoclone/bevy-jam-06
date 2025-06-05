@@ -1,3 +1,7 @@
+use bevy::ecs::query::QueryData;
+use bevy::ecs::query::QueryFilter;
+use bevy::ecs::system::SystemParam;
+
 use crate::core::audio::AudioSettings;
 use crate::core::audio::music_audio;
 use crate::core::mouse_position::MousePosition;
@@ -9,17 +13,17 @@ use crate::screen::Screen;
 const WALL_COLOR: Color = Color::srgb(0.2, 0.2, 0.2);
 const FLOOR_COLOR: Color = Color::srgb(0.3, 0.1, 0.1);
 const PLAYER_COLOR: Color = Color::srgb(0.2, 0.5, 0.2);
-const CROSSHAIR_COLOR: Color = Color::WHITE;
+const CROSSHAIR_COLOR: Color = Color::srgba(1.0, 1.0, 1.0, 0.33);
+const BULLET_COLOR: Color = Color::srgb(0.5, 0.5, 1.0);
 
 const PLAY_AREA_DIAMETER: f32 = WINDOW_HEIGHT;
 
 const FLOOR_THICKNESS: f32 = 5.0;
 
-const PLAYER_WIDTH: f32 = 10.0;
-const PLAYER_HEIGHT: f32 = 20.0;
+const PLAYER_SIZE: Vec2 = Vec2::new(10.0, 20.0);
+const STARTING_PLAYER_HEALTH: u16 = 100;
 
-const CROSSHAIR_WIDTH: f32 = 5.0;
-const CROSSHAIR_HEIGHT: f32 = 5.0;
+const CROSSHAIR_SIZE: Vec2 = Vec2::new(7.0, 7.0);
 const CROSSHAIR_Z: f32 = 10.0;
 
 const JUMP_FORCE: f32 = 200.0;
@@ -27,11 +31,26 @@ const MOVEMENT_ACCEL: f32 = 1000.0;
 const MAX_MOVEMENT_SPEED: f32 = 100.0;
 const DEFAULT_MOVEMENT_DAMPING_FACTOR: f32 = 0.92;
 
+const DEFAULT_PLAYER_ATTACK_COOLDOWN: Duration = Duration::from_millis(650);
+
+const BULLET_SIZE: Vec2 = Vec2::new(5.0, 5.0);
+const BULLET_Z: f32 = 1.0;
+const BULLET_SPEED: f32 = 1000.0;
+const BULLET_DAMAGE: u16 = 10;
+
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(StateFlush, Screen::Gameplay.on_enter(spawn_gameplay_screen));
     app.add_systems(
         Update,
         update_crosshair_position.in_set(UpdateSystems::Update),
+    );
+    app.add_systems(
+        Update,
+        tick_attack_cooldown_timers.in_set(UpdateSystems::TickTimers),
+    );
+    app.add_systems(
+        Update,
+        handle_bullet_collisions.in_set(UpdateSystems::SyncLate),
     );
 
     app.configure::<(GameplayAssets, GameplayAction)>();
@@ -42,6 +61,21 @@ struct Player;
 
 #[derive(Component)]
 struct Crosshair;
+
+#[derive(Component)]
+struct Bullet {
+    source: Entity,
+    damage: u16,
+}
+
+#[derive(Component)]
+struct Health(u16);
+
+#[derive(Component)]
+struct Enemy;
+
+#[derive(Component)]
+struct AttackCooldown(Timer);
 
 /// The damping factor used for slowing down movement.
 #[derive(Component)]
@@ -168,22 +202,22 @@ fn spawn_gameplay_screen(
     // player
     commands.spawn((
         Transform::from_translation(Vec3::new(0.0, -(PLAY_AREA_DIAMETER * 0.33), 0.0)),
-        Sprite::from_color(PLAYER_COLOR, Vec2::new(PLAYER_WIDTH, PLAYER_HEIGHT)),
-        Collider::rectangle(PLAYER_WIDTH, PLAYER_HEIGHT),
+        Sprite::from_color(PLAYER_COLOR, PLAYER_SIZE),
+        Collider::rectangle(PLAYER_SIZE.x, PLAYER_SIZE.y),
         RigidBody::Dynamic,
         LockedAxes::ROTATION_LOCKED,
+        CollisionEventsEnabled,
         DespawnOnExitState::<Screen>::Recursive,
         Player,
         MovementDampingFactor(DEFAULT_MOVEMENT_DAMPING_FACTOR),
+        AttackCooldown(Timer::new(DEFAULT_PLAYER_ATTACK_COOLDOWN, TimerMode::Once)),
+        Health(STARTING_PLAYER_HEALTH),
     ));
 
     // crosshair
     commands.spawn((
         Transform::from_translation(Vec3::new(0.0, 0.0, CROSSHAIR_Z)),
-        Sprite::from_color(
-            CROSSHAIR_COLOR,
-            Vec2::new(CROSSHAIR_WIDTH, CROSSHAIR_HEIGHT),
-        ),
+        Sprite::from_color(CROSSHAIR_COLOR, CROSSHAIR_SIZE),
         DespawnOnExitState::<Screen>::Recursive,
         Crosshair,
     ));
@@ -197,6 +231,81 @@ fn update_crosshair_position(
     let mut crosshair_transform = r!(crosshair_query.single_mut());
     crosshair_transform.translation.x = mouse_position.0.x;
     crosshair_transform.translation.y = mouse_position.0.y;
+}
+
+/// Advances all the attack cooldown timers
+fn tick_attack_cooldown_timers(time: Res<Time>, attack_cooldown_query: Query<&mut AttackCooldown>) {
+    for mut attack_cooldown in attack_cooldown_query {
+        attack_cooldown.0.tick(time.delta());
+    }
+}
+
+/// Filters collisions for bullets
+#[derive(SystemParam)]
+pub struct BulletCollisionHooks<'w, 's> {
+    bullet_query: Query<'w, 's, &'static Bullet>,
+}
+
+// Implement the `CollisionHooks` trait.
+impl CollisionHooks for BulletCollisionHooks<'_, '_> {
+    fn filter_pairs(&self, collider1: Entity, collider2: Entity, _commands: &mut Commands) -> bool {
+        // don't allow collisions between an entity and the bullets it fires
+        if let Ok(bullet) = self.bullet_query.get(collider1) {
+            return bullet.source != collider2;
+        }
+
+        if let Ok(bullet) = self.bullet_query.get(collider2) {
+            return bullet.source != collider1;
+        }
+
+        true
+    }
+}
+
+/// Deals with collisions involving bullets
+fn handle_bullet_collisions(
+    mut commands: Commands,
+    collisions: Collisions,
+    bullet_query: Query<(Entity, &Bullet)>,
+    mut damageable_query: Query<(&mut Health, Entity)>,
+) {
+    for (bullet_entity, bullet) in bullet_query {
+        let mut hit = false;
+        for other_entity in collisions.entities_colliding_with(bullet_entity) {
+            if other_entity == bullet.source {
+                // entities can't damage themselves
+                continue;
+            }
+
+            if let Ok((mut health, _)) = damageable_query.get_mut(other_entity) {
+                health.0 = health.0.saturating_sub(bullet.damage);
+            }
+
+            hit = true;
+        }
+
+        if hit {
+            commands.entity(bullet_entity).despawn();
+        }
+    }
+}
+
+/// Gets either `a` or `b` from the provided query.
+/// Returns a tuple with the found entity first and the non-found entity second.
+fn get_either<Q: QueryData, F: QueryFilter>(
+    a: Entity,
+    b: Entity,
+    query: &Query<Q, F>,
+) -> Option<(Entity, Entity)> {
+    if query.get(a).is_ok() {
+        return Some((a, b));
+    }
+
+    if query.get(b).is_ok() {
+        return Some((b, a));
+    }
+
+    None
 }
 
 #[derive(AssetCollection, Resource, Reflect, Default)]
@@ -220,6 +329,7 @@ pub enum GameplayAction {
     Jump,
     MoveLeft,
     MoveRight,
+    Attack,
 }
 
 impl Configure for GameplayAction {
@@ -233,7 +343,8 @@ impl Configure for GameplayAction {
                 .with(Self::CloseMenu, KeyCode::KeyP)
                 .with(Self::Jump, KeyCode::Space)
                 .with(Self::MoveLeft, KeyCode::KeyA)
-                .with(Self::MoveRight, KeyCode::KeyD),
+                .with(Self::MoveRight, KeyCode::KeyD)
+                .with(Self::Attack, MouseButton::Left),
         );
         app.add_plugins(InputManagerPlugin::<Self>::default());
         app.add_systems(
@@ -253,6 +364,9 @@ impl Configure for GameplayAction {
                 move_right
                     .in_set(UpdateSystems::RecordInput)
                     .run_if(action_pressed(Self::MoveRight)),
+                attack
+                    .in_set(UpdateSystems::RecordInput)
+                    .run_if(action_pressed(Self::Attack)),
                 apply_movement_damping.in_set(UpdateSystems::Update),
             )),
         );
@@ -292,6 +406,37 @@ fn move_right(time: Res<Time>, velocity_query: Query<&mut LinearVelocity, With<P
         if velocity.x < MAX_MOVEMENT_SPEED {
             velocity.x += MOVEMENT_ACCEL * delta_secs;
         }
+    }
+}
+
+/// Makes the player attack
+fn attack(
+    mut commands: Commands,
+    mouse_position: Res<MousePosition>,
+    player_query: Query<(&Transform, &mut AttackCooldown, Entity), With<Player>>,
+) {
+    for (transform, mut attack_cooldown, player_entity) in player_query {
+        if !attack_cooldown.0.finished() {
+            continue;
+        }
+
+        let to_mouse_position = (mouse_position.0 - transform.translation.xy()).normalize();
+
+        commands.spawn((
+            Sprite::from_color(BULLET_COLOR, BULLET_SIZE),
+            Transform::from_translation(transform.translation.with_z(BULLET_Z)),
+            LinearVelocity(to_mouse_position * BULLET_SPEED),
+            RigidBody::Dynamic,
+            Collider::rectangle(BULLET_SIZE.x, BULLET_SIZE.y),
+            GravityScale(0.0),
+            CollisionEventsEnabled,
+            Bullet {
+                source: player_entity,
+                damage: BULLET_DAMAGE,
+            },
+        ));
+
+        attack_cooldown.0.reset();
     }
 }
 
