@@ -10,17 +10,23 @@ use crate::screen::Screen;
 
 const WALL_COLOR: Color = Color::srgb(0.2, 0.2, 0.2);
 const FLOOR_COLOR: Color = Color::srgb(0.3, 0.1, 0.1);
-const PLAYER_COLOR: Color = Color::srgb(0.2, 0.5, 0.2);
-const CROSSHAIR_COLOR: Color = Color::srgba(1.0, 1.0, 1.0, 0.33);
-const BULLET_COLOR: Color = Color::srgb(0.5, 0.5, 1.0);
 
 const PLAY_AREA_DIAMETER: f32 = WINDOW_HEIGHT;
 
 const FLOOR_THICKNESS: f32 = 5.0;
 
+const PLAYER_COLOR: Color = Color::srgb(0.2, 0.5, 0.2);
 const PLAYER_SIZE: Vec2 = Vec2::new(10.0, 20.0);
 const STARTING_PLAYER_HEALTH: u16 = 100;
 
+const ENEMY_COLOR: Color = Color::srgb(0.5, 0.2, 0.2);
+const ENEMY_SIZE: Vec2 = Vec2::new(10.0, 20.0);
+const ENEMY_HEALTH: u16 = 10;
+const ENEMY_SPAWN_COOLDOWN: Duration = Duration::from_millis(2000);
+const ENEMY_ATTACK_COOLDOWN: Duration = Duration::from_millis(2500);
+const MAX_ENEMIES: usize = 25;
+
+const CROSSHAIR_COLOR: Color = Color::srgba(1.0, 1.0, 1.0, 0.33);
 const CROSSHAIR_SIZE: Vec2 = Vec2::new(7.0, 7.0);
 const CROSSHAIR_Z: f32 = 10.0;
 
@@ -31,6 +37,7 @@ const DEFAULT_MOVEMENT_DAMPING_FACTOR: f32 = 0.92;
 
 const DEFAULT_PLAYER_ATTACK_COOLDOWN: Duration = Duration::from_millis(650);
 
+const BULLET_COLOR: Color = Color::srgb(0.5, 0.5, 1.0);
 const BULLET_SIZE: Vec2 = Vec2::new(5.0, 5.0);
 const BULLET_Z: f32 = 1.0;
 const BULLET_SPEED: f32 = 1000.0;
@@ -40,16 +47,22 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(StateFlush, Screen::Gameplay.on_enter(spawn_gameplay_screen));
     app.add_systems(
         Update,
-        update_crosshair_position.in_set(UpdateSystems::Update),
+        (update_crosshair_position, spawn_enemies).in_set(UpdateSystems::Update),
     );
     app.add_systems(
         Update,
-        tick_attack_cooldown_timers.in_set(UpdateSystems::TickTimers),
+        (tick_attack_cooldown_timers, tick_enemy_spawn_cooldown_timer)
+            .in_set(UpdateSystems::TickTimers)
+            .in_set(PausableSystems),
     );
     app.add_systems(
         Update,
         handle_bullet_collisions.in_set(UpdateSystems::SyncLate),
     );
+    app.insert_resource(EnemySpawnCooldown(Timer::new(
+        ENEMY_SPAWN_COOLDOWN,
+        TimerMode::Once,
+    )));
 
     app.configure::<(GameplayAssets, GameplayAction)>();
 }
@@ -78,6 +91,9 @@ struct AttackCooldown(Timer);
 /// The damping factor used for slowing down movement.
 #[derive(Component)]
 pub struct MovementDampingFactor(f32);
+
+#[derive(Resource)]
+struct EnemySpawnCooldown(Timer);
 
 fn spawn_gameplay_screen(
     mut commands: Commands,
@@ -231,11 +247,44 @@ fn update_crosshair_position(
     crosshair_transform.translation.y = mouse_position.0.y;
 }
 
+fn spawn_enemies(
+    mut commands: Commands,
+    mut enemy_spawn_cooldown: ResMut<EnemySpawnCooldown>,
+    enemy_query: Query<Entity, With<Enemy>>,
+) {
+    if enemy_spawn_cooldown.0.finished() && enemy_query.iter().len() < MAX_ENEMIES {
+        commands.spawn((
+            //TODO choose a random location that's not too close to the player
+            Transform::from_translation(Vec3::new(0.0, -(PLAY_AREA_DIAMETER * 0.33), 0.0)),
+            Sprite::from_color(ENEMY_COLOR, ENEMY_SIZE),
+            Collider::rectangle(ENEMY_SIZE.x, ENEMY_SIZE.y),
+            RigidBody::Dynamic,
+            LockedAxes::ROTATION_LOCKED,
+            CollisionEventsEnabled,
+            DespawnOnExitState::<Screen>::Recursive,
+            Enemy,
+            MovementDampingFactor(DEFAULT_MOVEMENT_DAMPING_FACTOR),
+            AttackCooldown(Timer::new(ENEMY_ATTACK_COOLDOWN, TimerMode::Once)),
+            Health(ENEMY_HEALTH),
+        ));
+
+        enemy_spawn_cooldown.0.reset();
+    }
+}
+
 /// Advances all the attack cooldown timers
 fn tick_attack_cooldown_timers(time: Res<Time>, attack_cooldown_query: Query<&mut AttackCooldown>) {
     for mut attack_cooldown in attack_cooldown_query {
         attack_cooldown.0.tick(time.delta());
     }
+}
+
+/// Advances the enemey spawn cooldown timer
+fn tick_enemy_spawn_cooldown_timer(
+    time: Res<Time>,
+    mut enemy_spawn_cooldown: ResMut<EnemySpawnCooldown>,
+) {
+    enemy_spawn_cooldown.0.tick(time.delta());
 }
 
 /// Filters collisions for bullets
